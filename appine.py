@@ -14,7 +14,6 @@ import os
 import json
 from dotenv import load_dotenv
 import time
-from tkinter import ttk
 def slugify(text: str) -> str:
     """
     Turn any bot name into a URL‐/ID‐safe lowercase hyphen slug.
