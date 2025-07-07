@@ -224,6 +224,38 @@ if 'vendor_df' in st.session_state:
     vendor_df = st.session_state['vendor_df']
 
 if data_source == "Upload Excel Files":
+    pr_cols = [
+        "PR Number", "Creation Date", "Created By", "Item Code", "UoM",
+        "Required Quantity", "Status", "Cost Center", "Item Description",
+        "Required Date", "Target Date", "Target Quantity",
+        "Requester Name", "Approval Date", "Approved By",
+    ]
+    buf_pr = BytesIO()
+    pd.DataFrame(columns=pr_cols).to_excel(buf_pr, index=False, engine="openpyxl")
+    buf_pr.seek(0)
+    st.sidebar.download_button(
+        "📥 Download empty PR template",
+        data=buf_pr,
+        file_name="pr_template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="download_pr_template"
+    )
+    po_cols = [
+        "purchaseorder_number","Creation Date","Created By","PO Date","Vendor Code","Vendor Name",
+        "Item Code","UoM","Quantity","Unit Price","Department","TaxCode","Document Currency",
+        "PR Number","GTotal","LineTotal","Total Tax","Open PO Quantity","Open PO Quantity rate",
+        "open po value","Series","Description","PO Due Date","Days","Approval Date","Approved By",
+    ]
+    buf_po = BytesIO()
+    pd.DataFrame(columns=po_cols).to_excel(buf_po, index=False, engine="openpyxl")
+    buf_po.seek(0)
+    st.sidebar.download_button(
+        "📥 Download empty PO template",
+        data=buf_po,
+        file_name="po_template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="download_po_template"
+    )
     pr_file = st.sidebar.file_uploader("Upload PR File", type=["xlsx", "xls", "csv"])
     po_file = st.sidebar.file_uploader("Upload PO File", type=["xlsx", "xls", "csv"])
 
@@ -259,22 +291,7 @@ if data_source == "Upload Excel Files":
         # … right after: if po_file and po_df is not None:
 
 # 1) offer a blank template for download
-        template_df = pd.DataFrame(columns=[
-            "purchaseorder_number","Creation Date","Created By","PO Date","Vendor Code","Vendor Name",
-            "Item Code","UoM","Quantity","Unit Price","Department","TaxCode","Document Currency",
-            "PR Number","GTotal","LineTotal","Total Tax","Open PO Quantity","Open PO Quantity rate",
-            "open po value","Series","Description","PO Due Date","Days","Approval Date","Approved By",
-        ])
-        towrite = BytesIO()
-        template_df.to_excel(towrite, index=False, engine="openpyxl")
-        towrite.seek(0)
-
-        st.sidebar.download_button(
-            label="📥 Download empty PO template",
-            data=towrite,
-            file_name="po_template.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        
 
 
         st.sidebar.markdown("### 🗺️ Map your PO file's columns")
@@ -332,7 +349,64 @@ if data_source == "Upload Excel Files":
             po_df = po_df.rename(columns={ user: internal for internal, user in mapping.items() })
             st.session_state['po_df'] = po_df
             st.sidebar.success("✅ PO columns mapped successfully!")
+    
+            # … right after your PO‐mapping code …
+
+    # ─── PR TEMPLATE & MAPPING ──────────────────────────────────────────
+    if pr_file and pr_df is not None:
+        # 1) blank PR template download
         
+
+        # 2) column‐mapping UI for PR
+        st.sidebar.markdown("### 🗺️ Map your PR file's columns")
+
+        required_pr_cols = [
+            "PR Number", "Creation Date", "Created By", "Item Code", "UoM",
+            "Required Quantity", "Status", "Cost Center", "Item Description",
+            "Required Date", "Target Date", "Target Quantity",
+            "Requester Name", "Approval Date", "Approved By",
+        ]
+
+        def _norm(s): return s.strip().lower().replace(" ", "")
+        actual_pr_cols = pr_df.columns.tolist()
+        norm_to_actual_pr = { _norm(c): c for c in actual_pr_cols }
+
+        # auto‐map exact matches
+        auto_pr = {}
+        for tgt in required_pr_cols:
+            k = _norm(tgt)
+            if k in norm_to_actual_pr:
+                auto_pr[tgt] = norm_to_actual_pr[k]
+
+        if set(auto_pr) == set(required_pr_cols):
+            # full auto‐map
+            pr_df = pr_df.rename(columns={ v:k for k,v in auto_pr.items() })
+            st.session_state['pr_df'] = pr_df
+            st.sidebar.success("✅ All PR columns auto-detected and mapped!")
+        else:
+            # manual map the rest
+            rem_tgt = [c for c in required_pr_cols if c not in auto_pr]
+            rem_act = [c for c in actual_pr_cols if _norm(c) not in { _norm(v) for v in auto_pr.values() }]
+            pr_map = auto_pr.copy()
+
+            for tgt in rem_tgt:
+                sel = st.sidebar.selectbox(
+                    f"Map '{tgt.upper()}' →",
+                    options=[""] + rem_act,
+                    key=f"map_pr_{tgt}"
+                )
+                pr_map[tgt] = sel
+                if sel: rem_act.remove(sel)
+
+            if not all(pr_map.values()):
+                st.sidebar.error("⚠️ Please map **all** PR fields before running.")
+                st.stop()
+
+            pr_df = pr_df.rename(columns={ v:k for k,v in pr_map.items() })
+            st.session_state['pr_df'] = pr_df
+            st.sidebar.success("✅ PR columns mapped successfully!")
+    # ─────────────────────────────────────────────────────────────────────
+
         # Vendor DF is typically derived or less critical for basic ops, can be empty
         if 'vendor_df' not in st.session_state or st.session_state['vendor_df'] is None:
             st.session_state['vendor_df'] = pd.DataFrame()
