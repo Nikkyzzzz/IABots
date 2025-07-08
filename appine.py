@@ -424,7 +424,7 @@ elif data_source == "Fetch from Database":
             st.session_state['vendor_df'] = vendor_df
             st.success("✅ Data fetched successfully from SQL Server.")
         except Exception as e:
-            st.error(f"❌ Failed to fetch data from SQL Server: {e}")
+            #st.error(f"❌ Failed to fetch data from SQL Server: {e}")
             # Ensure DFs are reset on failure to prevent using old data
             pr_df, po_df, vendor_df = None, None, None
             if 'pr_df' in st.session_state: del st.session_state['pr_df']
@@ -581,7 +581,8 @@ if section == "📁 Generated Reports":
                 df = bot_func()
                 if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
                     st.dataframe(df)
-
+                    for col in df.select_dtypes(include=['datetimetz']):
+                        df[col] = df[col].dt.tz_localize(None)
                     output = BytesIO()
                     df.to_excel(output, index=False, engine='openpyxl')
                     output.seek(0)
